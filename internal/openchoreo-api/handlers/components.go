@@ -66,6 +66,7 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	logger := logger.GetLogger(ctx)
 	logger.Debug("ListComponents handler called")
 
+	// Extract path parameters
 	orgName := r.PathValue("orgName")
 	projectName := r.PathValue("projectName")
 
@@ -116,6 +117,7 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Legacy mode
+	// Call service to list components
 	components, err := h.services.ComponentService.ListComponents(ctx, orgName, projectName)
 	if err != nil {
 		logger.Error("Failed to list components", "error", err)
@@ -124,9 +126,11 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to slice of values for the list response
 	componentValues := make([]*models.ComponentResponse, len(components))
 	copy(componentValues, components)
 
+	// Success response with pagination info (simplified for now)
 	logger.Debug("Listed components successfully",
 		"org", orgName,
 		"project", projectName,

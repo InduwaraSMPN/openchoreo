@@ -109,6 +109,7 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Legacy mode
+	// Call service to list projects
 	projects, err := h.services.ProjectService.ListProjects(ctx, orgName)
 	if err != nil {
 		logger.Error("Failed to list projects", "error", err)
@@ -117,9 +118,11 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert to slice of values for the list response
 	projectValues := make([]*models.ProjectResponse, len(projects))
 	copy(projectValues, projects)
 
+	// Success response with pagination info (simplified for now)
 	logger.Debug("Listed projects successfully", "org", orgName, "count", len(projects))
 	writeListResponse(w, projectValues, len(projects), 1, len(projects))
 }
