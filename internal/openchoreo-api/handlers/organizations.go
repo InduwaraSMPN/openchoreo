@@ -5,19 +5,52 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
+	"github.com/openchoreo/openchoreo/internal/openchoreo-api/middleware/logger"
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/services"
 )
 
 // ListOrganizations handles GET /api/v1/orgs
+// Supports both legacy (no params) and cursor-based (?cursor=X&limit=Y) pagination
 func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := logger.GetLogger(ctx)
 
+	// Check if cursor-based pagination is requested
+	cursor, limit, useCursor := parseCursorParams(r)
+
+	if useCursor {
+		if err := validateCursorWithContext(cursor); err != nil {
+			writeErrorResponse(w, http.StatusBadRequest,
+				fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
+			return
+		}
+
+		organizations, nextCursor, err := h.services.OrganizationService.ListOrganizationsWithCursor(
+			ctx, cursor, limit)
+		if err != nil {
+			if errors.Is(err, services.ErrContinueTokenExpired) {
+				writeTokenExpiredError(w)
+				return
+			}
+			logger.Error("Failed to list organizations with cursor", "error", err)
+			writeErrorResponse(w, http.StatusInternalServerError,
+				"Failed to list organizations", services.CodeInternalError)
+			return
+		}
+
+		writeCursorListResponse(w, organizations, nextCursor)
+		return
+	}
+
+	// Legacy mode: return all organizations
 	organizations, err := h.services.OrganizationService.ListOrganizations(ctx)
 	if err != nil {
-		h.logger.Error("Failed to list organizations", "error", err)
-		writeErrorResponse(w, http.StatusInternalServerError, "Failed to list organizations", services.CodeInternalError)
+		logger.Error("Failed to list organizations", "error", err)
+		writeErrorResponse(w, http.StatusInternalServerError,
+			"Failed to list organizations", services.CodeInternalError)
 		return
 	}
 
@@ -27,9 +60,11 @@ func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 // GetOrganization handles GET /api/v1/orgs/{orgName}
 func (h *Handler) GetOrganization(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	logger := logger.GetLogger(ctx)
 	orgName := r.PathValue("orgName")
 
 	if orgName == "" {
+		logger.Warn("Organization name is required")
 		writeErrorResponse(w, http.StatusBadRequest, "Organization name is required", services.CodeInvalidInput)
 		return
 	}
@@ -37,10 +72,11 @@ func (h *Handler) GetOrganization(w http.ResponseWriter, r *http.Request) {
 	organization, err := h.services.OrganizationService.GetOrganization(ctx, orgName)
 	if err != nil {
 		if errors.Is(err, services.ErrOrganizationNotFound) {
+			logger.Warn("Organization not found", "org", orgName)
 			writeErrorResponse(w, http.StatusNotFound, "Organization not found", services.CodeOrganizationNotFound)
 			return
 		}
-		h.logger.Error("Failed to get organization", "error", err, "org", orgName)
+		logger.Error("Failed to get organization", "error", err, "org", orgName)
 		writeErrorResponse(w, http.StatusInternalServerError, "Failed to get organization", services.CodeInternalError)
 		return
 	}

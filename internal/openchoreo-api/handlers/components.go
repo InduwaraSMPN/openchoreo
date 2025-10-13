@@ -6,6 +6,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -65,34 +66,71 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	logger := logger.GetLogger(ctx)
 	logger.Debug("ListComponents handler called")
 
-	// Extract path parameters
 	orgName := r.PathValue("orgName")
 	projectName := r.PathValue("projectName")
+
 	if orgName == "" || projectName == "" {
-		logger.Warn("Organization name and project name are required")
-		writeErrorResponse(w, http.StatusBadRequest, "Organization name and project name are required", "INVALID_PARAMS")
+		logger.Warn("Organization and project names are required")
+		writeErrorResponse(w, http.StatusBadRequest,
+			"Organization and project names are required", "INVALID_PARAMS")
 		return
 	}
 
-	// Call service to list components
-	components, err := h.services.ComponentService.ListComponents(ctx, orgName, projectName)
-	if err != nil {
-		if errors.Is(err, services.ErrProjectNotFound) {
-			logger.Warn("Project not found", "org", orgName, "project", projectName)
-			writeErrorResponse(w, http.StatusNotFound, "Project not found", services.CodeProjectNotFound)
+	// Check for cursor-based pagination
+	cursor, limit, useCursor := parseCursorParams(r)
+
+	if useCursor {
+		if err := validateCursorWithContext(cursor); err != nil {
+			writeErrorResponse(w, http.StatusBadRequest,
+				fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
 			return
 		}
-		logger.Error("Failed to list components", "error", err)
-		writeErrorResponse(w, http.StatusInternalServerError, "Internal server error", services.CodeInternalError)
+
+		// If cursor is provided but no limit, require explicit limit
+		if limit == 0 {
+			writeErrorResponse(w, http.StatusBadRequest,
+				"limit parameter is required when using cursor pagination", "MISSING_LIMIT")
+			return
+		}
+
+		components, nextCursor, err := h.services.ComponentService.ListComponentsWithCursor(
+			ctx, orgName, projectName, cursor, limit)
+		if err != nil {
+			if errors.Is(err, services.ErrProjectNotFound) {
+				writeErrorResponse(w, http.StatusNotFound,
+					"Project not found", services.CodeProjectNotFound)
+				return
+			}
+			if errors.Is(err, services.ErrContinueTokenExpired) {
+				writeTokenExpiredError(w)
+				return
+			}
+			logger.Error("Failed to list components with cursor", "error", err)
+			writeErrorResponse(w, http.StatusInternalServerError,
+				"Internal server error", services.CodeInternalError)
+			return
+		}
+
+		writeCursorListResponse(w, components, nextCursor)
 		return
 	}
 
-	// Convert to slice of values for the list response
+	// Legacy mode
+	components, err := h.services.ComponentService.ListComponents(ctx, orgName, projectName)
+	if err != nil {
+		logger.Error("Failed to list components", "error", err)
+		writeErrorResponse(w, http.StatusInternalServerError,
+			"Internal server error", services.CodeInternalError)
+		return
+	}
+
 	componentValues := make([]*models.ComponentResponse, len(components))
 	copy(componentValues, components)
 
-	// Success response with pagination info (simplified for now)
-	logger.Debug("Listed components successfully", "org", orgName, "project", projectName, "count", len(components))
+	logger.Debug("Listed components successfully",
+		"org", orgName,
+		"project", projectName,
+		"count", len(components))
 	writeListResponse(w, componentValues, len(components), 1, len(components))
 }
 
