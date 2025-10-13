@@ -5,12 +5,16 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openchoreov1alpha1 "github.com/openchoreo/openchoreo/api/v1alpha1"
 )
+
+// ErrComponentResourceNotFound is returned when a component resource is not found
+var ErrComponentResourceNotFound = errors.New("component resource not found")
 
 // ComponentSpecFetcher interface for fetching component-specific specifications
 type ComponentSpecFetcher interface {
@@ -70,7 +74,7 @@ func (f *ServiceSpecFetcher) FetchSpec(ctx context.Context, k8sClient client.Cli
 		}
 	}
 
-	return nil, fmt.Errorf("service not found for component: %s", componentName)
+	return nil, fmt.Errorf("%w: service not found for component: %s", ErrComponentResourceNotFound, componentName)
 }
 
 // WebApplicationSpecFetcher fetches WebApplication specifications
@@ -95,7 +99,7 @@ func (f *WebApplicationSpecFetcher) FetchSpec(ctx context.Context, k8sClient cli
 		}
 	}
 
-	return nil, fmt.Errorf("web application not found for component: %s", componentName)
+	return nil, fmt.Errorf("%w: web application not found for component: %s", ErrComponentResourceNotFound, componentName)
 }
 
 type WorkloadSpecFetcher struct{}
@@ -119,5 +123,5 @@ func (f *WorkloadSpecFetcher) FetchSpec(ctx context.Context, k8sClient client.Cl
 		}
 	}
 
-	return nil, fmt.Errorf("workload not found for component: %s", componentName)
+	return nil, fmt.Errorf("%w: workload not found for component: %s", ErrComponentResourceNotFound, componentName)
 }
