@@ -70,13 +70,20 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for cursor-based pagination
-	cursor, limit, useCursor := parseCursorParams(r)
+	cursor, limit, useCursor, err := parseCursorParams(r)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, err.Error(), services.CodeInvalidInput)
+		return
+	}
 
 	if useCursor {
-		if err := validateCursorWithContext(cursor); err != nil {
-			writeErrorResponse(w, http.StatusBadRequest,
-				fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
-			return
+		//only validate non-empty cursors
+		if cursor != "" {
+			if err := validateCursorWithContext(cursor); err != nil {
+				writeErrorResponse(w, http.StatusBadRequest,
+					fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
+				return
+			}
 		}
 
 		// If cursor is provided but no limit, require explicit limit

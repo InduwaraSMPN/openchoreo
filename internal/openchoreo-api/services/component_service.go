@@ -257,7 +257,7 @@ func (s *ComponentService) GetComponent(ctx context.Context, orgName, projectNam
 		if err != nil {
 			// Check if this is a "not found" error from the fetcher
 			if errors.Is(err, ErrComponentResourceNotFound) {
-				s.logger.Debug(
+				s.logger.Warn(
 					"Resource not found for fetcher",
 					"fetcherKey", fetcherKey,
 					"org", orgName,

@@ -12,6 +12,12 @@ import (
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/models"
 )
 
+const (
+	DefaultLimit    = 16
+	MaxLimit        = 1024 // Standard maximum 1024 items per page
+	MaxCursorLength = 8192 // Kubernetes API Server's default maximum URL length
+)
+
 // writeSuccessResponse writes a successful API response
 func writeSuccessResponse[T any](w http.ResponseWriter, statusCode int, data T) {
 	w.Header().Set("Content-Type", "application/json")
@@ -57,9 +63,8 @@ func writeListResponse[T any](w http.ResponseWriter, items []T, total, page, pag
 	_ = json.NewEncoder(w).Encode(response) // Ignore encoding errors for response
 }
 
-
-// parsed limit as int64, defaulting to 16 if not provided or invalid.
-func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor bool) {
+// parseCursorParams parses cursor and limit parameters with security bounds
+func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor bool, err error) {
 	query := r.URL.Query()
 
 	cursor = query.Get("cursor")
@@ -67,38 +72,41 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 
 	useCursor = cursor != "" || limitStr != ""
 
-	limit = 16
-	
+	limit = DefaultLimit
+
 	if limitStr != "" {
-		if parsedLimit, err := strconv.ParseInt(limitStr, 10, 64); err == nil && parsedLimit > 0 {
+		if parsedLimit, parseErr := strconv.ParseInt(limitStr, 10, 64); parseErr != nil {
+			return "", 0, false, fmt.Errorf("invalid limit format: %v", parseErr)
+		} else if parsedLimit <= 0 {
+			return "", 0, false, fmt.Errorf("limit must be positive, got: %d", parsedLimit)
+		} else if parsedLimit > MaxLimit {
+			limit = MaxLimit
+		} else {
 			limit = parsedLimit
 		}
 	}
 
-	return cursor, limit, useCursor
+	return cursor, limit, useCursor, nil
 }
 
-// validates the cursor string, ensuring it does not exceed 8192 characters, which aligns with the Kubernetes API Server's default maximum URL length.
+// validateCursorWithContext validates the cursor string with security bounds
 func validateCursorWithContext(cursor string) error {
 	if cursor == "" {
+		// allow empty cursor for first page, but will enforce other restrictions
 		return nil
 	}
-	if len(cursor) > 8192 {
-		return fmt.Errorf("cursor exceeds maximum allowed length")
+	if len(cursor) > MaxCursorLength {
+		return fmt.Errorf("cursor exceeds maximum allowed length of %d characters", MaxCursorLength)
 	}
 
 	if !isValidContinueToken(cursor) {
-		return fmt.Errorf("cursor format is invalid")
+		return fmt.Errorf("cursor format is invalid: contains unauthorized characters")
 	}
 
 	return nil
 }
 
 func isValidContinueToken(token string) bool {
-	if token == "" {
-		return true
-	}
-
 	// manual character validation loop is intentionally used here to mitigate regex compilation overhead.
 	for i := 0; i < len(token); i++ {
 		c := token[i]
@@ -115,10 +123,19 @@ func writeCursorListResponse[T any](w http.ResponseWriter, items []T, nextCursor
 	w.WriteHeader(http.StatusOK)
 
 	var nextCursorPtr *string
+
 	if nextCursor != "" {
+		// State 1: More pages available - return the token
 		nextCursorPtr = &nextCursor
+	} else if len(items) > 0 {
+		// State 2: End of results - return empty string
+		// This tells clients "pagination is complete"
+		emptyCursor := ""
+		nextCursorPtr = &emptyCursor
 	}
+	// State 3: nil case - handled automatically by var declaration
+	// This occurs when no results and no cursor needed
 
 	response := models.CursorListSuccessResponse(items, nextCursorPtr)
-	_ = json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response) // Ignore encoding errors for response
 }

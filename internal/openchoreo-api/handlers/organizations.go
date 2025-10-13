@@ -19,25 +19,33 @@ func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 	logger := logger.GetLogger(ctx)
 
 	// Check if cursor-based pagination is requested
-	cursor, limit, useCursor := parseCursorParams(r)
+	cursor, limit, useCursor, err := parseCursorParams(r)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, err.Error(), services.CodeInvalidInput)
+		return
+	}
 
 	if useCursor {
-		if err := validateCursorWithContext(cursor); err != nil {
-			writeErrorResponse(w, http.StatusBadRequest,
-				fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
-			return
+		// only validate non-empty cursors
+		if cursor != "" {
+			if err := validateCursorWithContext(cursor); err != nil {
+				writeErrorResponse(w, http.StatusBadRequest,
+					fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
+				return
+			}
 		}
 
 		organizations, nextCursor, err := h.services.OrganizationService.ListOrganizationsWithCursor(
 			ctx, cursor, limit)
 		if err != nil {
-			if errors.Is(err, services.ErrContinueTokenExpired) {
-				writeTokenExpiredError(w)
-				return
-			}
+			// Check specific errors first
 			if errors.Is(err, services.ErrOrganizationNotFound) {
 				writeErrorResponse(w, http.StatusNotFound,
 					"Organization not found", services.CodeOrganizationNotFound)
+				return
+			}
+			if errors.Is(err, services.ErrContinueTokenExpired) {
+				writeTokenExpiredError(w)
 				return
 			}
 			logger.Error("Failed to list organizations with cursor", "error", err)

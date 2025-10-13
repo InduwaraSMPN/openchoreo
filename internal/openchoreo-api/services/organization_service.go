@@ -40,9 +40,10 @@ func (s *OrganizationService) ListOrganizations(ctx context.Context) ([]*models.
 		return nil, fmt.Errorf("failed to list organizations: %w", err)
 	}
 
+	// use index-based loop consistently
 	organizations := make([]*models.OrganizationResponse, 0, len(orgList.Items))
-	for _, item := range orgList.Items {
-		organizations = append(organizations, s.toOrganizationResponse(&item))
+	for i := range orgList.Items {
+		organizations = append(organizations, s.toOrganizationResponse(&orgList.Items[i]))
 	}
 
 	s.logger.Debug("Listed organizations", "count", len(organizations))
@@ -122,16 +123,18 @@ func (s *OrganizationService) toOrganizationResponse(org *openchoreov1alpha1.Org
 	displayName := org.Annotations[controller.AnnotationKeyDisplayName]
 	description := org.Annotations[controller.AnnotationKeyDescription]
 
-	// Get status from conditions
+	// handle empty conditions slice
 	status := statusUnknown
 	if len(org.Status.Conditions) > 0 {
-		// Get the latest condition
+		// Get the latest condition safely
 		latestCondition := org.Status.Conditions[len(org.Status.Conditions)-1]
 		if latestCondition.Status == metav1.ConditionTrue {
 			status = statusReady
 		} else {
 			status = statusNotReady
 		}
+	} else {
+		s.logger.Debug("Organization has no status conditions", "org", org.Name)
 	}
 
 	return &models.OrganizationResponse{
