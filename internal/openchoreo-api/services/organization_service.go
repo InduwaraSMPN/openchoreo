@@ -36,6 +36,7 @@ func (s *OrganizationService) ListOrganizations(ctx context.Context) ([]*models.
 
 	var orgList openchoreov1alpha1.OrganizationList
 	if err := s.k8sClient.List(ctx, &orgList); err != nil {
+		s.logger.Error("Failed to list organizations", "error", err)
 		return nil, fmt.Errorf("failed to list organizations: %w", err)
 	}
 
