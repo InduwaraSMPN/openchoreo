@@ -3,7 +3,12 @@
 
 package services
 
-import "errors"
+import (
+	"errors"
+	"strings"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+)
 
 // Common service errors
 var (
@@ -19,6 +24,9 @@ var (
 	ErrBindingNotFound            = errors.New("binding not found")
 	ErrDeploymentPipelineNotFound = errors.New("deployment pipeline not found")
 	ErrInvalidPromotionPath       = errors.New("invalid promotion path")
+	ErrContinueTokenExpired       = errors.New("continue token has expired")
+	ErrInvalidCursorFormat        = errors.New("invalid cursor format")
+	ErrResourceNotFound           = errors.New("resource not found")
 )
 
 // Error codes for API responses
@@ -37,4 +45,22 @@ const (
 	CodeInvalidPromotionPath       = "INVALID_PROMOTION_PATH"
 	CodeInvalidInput               = "INVALID_INPUT"
 	CodeInternalError              = "INTERNAL_ERROR"
+	CodeContinueTokenExpired       = "CONTINUE_TOKEN_EXPIRED"
+	CodeInvalidCursorFormat        = "INVALID_CURSOR_FORMAT"
 )
+
+// isExpiredTokenError checks if an error indicates an expired continue token
+func isExpiredTokenError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a K8s Gone error (410 status) which indicates an expired token
+	if apierrors.IsGone(err) {
+		return true
+	}
+
+	// Check for specific Kubernetes continue token error messages
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "continue token") && strings.Contains(errMsg, "expired")
+}

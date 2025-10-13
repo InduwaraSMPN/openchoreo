@@ -14,6 +14,7 @@ import (
 
 	openchoreov1alpha1 "github.com/openchoreo/openchoreo/api/v1alpha1"
 	"github.com/openchoreo/openchoreo/internal/controller"
+	"github.com/openchoreo/openchoreo/internal/labels"
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/models"
 )
 
@@ -133,6 +134,70 @@ func (s *ComponentService) ListComponents(ctx context.Context, orgName, projectN
 	return components, nil
 }
 
+// ListComponentsWithCursor lists components for a project with cursor-based pagination
+func (s *ComponentService) ListComponentsWithCursor(
+	ctx context.Context,
+	orgName string,
+	projectName string,
+	continueToken string,
+	limit int64,
+) ([]*models.ComponentResponse, string, error) {
+	s.logger.Debug("Listing components with cursor",
+		"org", orgName,
+		"project", projectName,
+		"continue", continueToken,
+		"limit", limit)
+
+	project := &openchoreov1alpha1.Project{}
+	projectKey := client.ObjectKey{
+		Name:      projectName,
+		Namespace: orgName,
+	}
+
+	if err := s.k8sClient.Get(ctx, projectKey, project); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return nil, "", ErrProjectNotFound
+		}
+		return nil, "", fmt.Errorf("failed to get project: %w", err)
+	}
+
+	var componentList openchoreov1alpha1.ComponentList
+
+	listOpts := []client.ListOption{
+		client.InNamespace(orgName),
+		client.Limit(limit),
+		client.MatchingLabels{
+			labels.LabelKeyProjectName: projectName,
+		},
+	}
+
+	if continueToken != "" {
+		listOpts = append(listOpts, client.Continue(continueToken))
+	}
+
+	if err := s.k8sClient.List(ctx, &componentList, listOpts...); err != nil {
+		if isExpiredTokenError(err) {
+			return nil, "", ErrContinueTokenExpired
+		}
+		return nil, "", fmt.Errorf("failed to list components: %w", err)
+	}
+
+	components := make([]*models.ComponentResponse, 0, len(componentList.Items))
+	for i := range componentList.Items {
+		components = append(components, s.toComponentResponse(&componentList.Items[i], make(map[string]interface{})))
+	}
+
+	nextContinue := componentList.Continue
+
+	s.logger.Debug("Listed components",
+		"org", orgName,
+		"project", projectName,
+		"count", len(components),
+		"nextContinue", nextContinue)
+
+	return components, nextContinue, nil
+}
+
 // GetComponent retrieves a specific component
 func (s *ComponentService) GetComponent(ctx context.Context, orgName, projectName, componentName string, additionalResources []string) (*models.ComponentResponse, error) {
 	s.logger.Debug("Getting component", "org", orgName, "project", projectName, "component", componentName)
@@ -190,8 +255,9 @@ func (s *ComponentService) GetComponent(ctx context.Context, orgName, projectNam
 
 		spec, err := fetcher.FetchSpec(ctx, s.k8sClient, orgName, componentName)
 		if err != nil {
-			if client.IgnoreNotFound(err) == nil {
-				s.logger.Warn(
+			// Check if this is a "not found" error from the fetcher
+			if errors.Is(err, ErrComponentResourceNotFound) {
+				s.logger.Debug(
 					"Resource not found for fetcher",
 					"fetcherKey", fetcherKey,
 					"org", orgName,
