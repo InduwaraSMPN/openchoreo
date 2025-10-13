@@ -83,6 +83,64 @@ func (s *ProjectService) ListProjects(ctx context.Context, orgName string) ([]*m
 	return projects, nil
 }
 
+// ListProjectsWithCursor lists projects for an org with cursor-based pagination
+func (s *ProjectService) ListProjectsWithCursor(
+	ctx context.Context,
+	orgName string,
+	continueToken string,
+	limit int64,
+) ([]*models.ProjectResponse, string, error) {
+	s.logger.Debug("Listing projects with cursor",
+		"org", orgName,
+		"continue", continueToken,
+		"limit", limit)
+
+	// Verify organization exists
+	org := &openchoreov1alpha1.Organization{}
+	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: orgName}, org); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return nil, "", ErrOrganizationNotFound
+		}
+		return nil, "", fmt.Errorf("failed to get organization: %w", err)
+	}
+
+	var projectList openchoreov1alpha1.ProjectList
+
+	// List projects filtered by organization
+	listOpts := []client.ListOption{
+		client.Limit(limit),
+		client.MatchingLabels{
+			labels.LabelKeyOrganizationName: orgName,
+		},
+	}
+
+	if continueToken != "" {
+		listOpts = append(listOpts, client.Continue(continueToken))
+	}
+
+	if err := s.k8sClient.List(ctx, &projectList, listOpts...); err != nil {
+		// Check if continue token expired
+		if isExpiredTokenError(err) {
+			return nil, "", ErrContinueTokenExpired
+		}
+		return nil, "", fmt.Errorf("failed to list projects: %w", err)
+	}
+
+	projects := make([]*models.ProjectResponse, 0, len(projectList.Items))
+	for i := range projectList.Items {
+		projects = append(projects, s.toProjectResponse(&projectList.Items[i]))
+	}
+
+	nextContinue := projectList.Continue
+
+	s.logger.Debug("Listed projects",
+		"org", orgName,
+		"count", len(projects),
+		"nextContinue", nextContinue)
+
+	return projects, nextContinue, nil
+}
+
 // GetProject retrieves a specific project
 func (s *ProjectService) GetProject(ctx context.Context, orgName, projectName string) (*models.ProjectResponse, error) {
 	s.logger.Debug("Getting project", "org", orgName, "project", projectName)
