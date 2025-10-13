@@ -16,6 +16,7 @@ var (
 	ErrProjectNotFound            = errors.New("project not found")
 	ErrComponentAlreadyExists     = errors.New("component already exists")
 	ErrComponentNotFound          = errors.New("component not found")
+	ErrComponentResourceNotFound  = errors.New("component resource not found")
 	ErrOrganizationNotFound       = errors.New("organization not found")
 	ErrEnvironmentNotFound        = errors.New("environment not found")
 	ErrEnvironmentAlreadyExists   = errors.New("environment already exists")

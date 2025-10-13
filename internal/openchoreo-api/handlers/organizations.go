@@ -35,6 +35,11 @@ func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 				writeTokenExpiredError(w)
 				return
 			}
+			if errors.Is(err, services.ErrOrganizationNotFound) {
+				writeErrorResponse(w, http.StatusNotFound,
+					"Organization not found", services.CodeOrganizationNotFound)
+				return
+			}
 			logger.Error("Failed to list organizations with cursor", "error", err)
 			writeErrorResponse(w, http.StatusInternalServerError,
 				"Failed to list organizations", services.CodeInternalError)

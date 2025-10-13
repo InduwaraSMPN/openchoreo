@@ -62,16 +62,16 @@ func (s *OrganizationService) ListOrganizationsWithCursor(
 	var orgList openchoreov1alpha1.OrganizationList
 
 	// Set up list options with K8s pagination
-	listOpts := &client.ListOptions{
-		Limit: limit,
+	listOpts := []client.ListOption{
+		client.Limit(limit),
 	}
 
 	// Add continue token if provided
 	if continueToken != "" {
-		listOpts.Continue = continueToken
+		listOpts = append(listOpts, client.Continue(continueToken))
 	}
 
-	if err := s.k8sClient.List(ctx, &orgList, listOpts); err != nil {
+	if err := s.k8sClient.List(ctx, &orgList, listOpts...); err != nil {
 		// Check if continue token expired
 		if isExpiredTokenError(err) {
 			return nil, "", ErrContinueTokenExpired

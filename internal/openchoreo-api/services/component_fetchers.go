@@ -5,16 +5,12 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openchoreov1alpha1 "github.com/openchoreo/openchoreo/api/v1alpha1"
 )
-
-// ErrComponentResourceNotFound is returned when a component resource is not found
-var ErrComponentResourceNotFound = errors.New("component resource not found")
 
 // ComponentSpecFetcher interface for fetching component-specific specifications
 type ComponentSpecFetcher interface {
