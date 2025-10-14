@@ -122,11 +122,12 @@ func (s *ComponentService) ListComponents(ctx context.Context, orgName, projectN
 		return nil, fmt.Errorf("failed to list components: %w", err)
 	}
 
+	// use index-based loop consistently
 	components := make([]*models.ComponentResponse, 0, len(componentList.Items))
-	for _, item := range componentList.Items {
+	for i := range componentList.Items {
 		// Only include components that belong to the specified project
-		if item.Spec.Owner.ProjectName == projectName {
-			components = append(components, s.toComponentResponse(&item, make(map[string]interface{})))
+		if componentList.Items[i].Spec.Owner.ProjectName == projectName {
+			components = append(components, s.toComponentResponse(&componentList.Items[i], make(map[string]interface{})))
 		}
 	}
 
@@ -1548,9 +1549,10 @@ func (s *ComponentService) createServiceResource(ctx context.Context, orgName, p
 	}
 
 	// Check if service already exists for this component
-	for _, service := range serviceList.Items {
-		if service.Spec.Owner.ComponentName == componentName && service.Spec.Owner.ProjectName == projectName {
-			s.logger.Debug("Service already exists for component", "service", service.Name, "component", componentName)
+	// SAFE: Use index-based loop consistently
+	for i := range serviceList.Items {
+		if serviceList.Items[i].Spec.Owner.ComponentName == componentName && serviceList.Items[i].Spec.Owner.ProjectName == projectName {
+			s.logger.Debug("Service already exists for component", "service", serviceList.Items[i].Name, "component", componentName)
 			return nil
 		}
 	}
@@ -1588,9 +1590,10 @@ func (s *ComponentService) createWebApplicationResource(ctx context.Context, org
 	}
 
 	// Check if web application already exists for this component
-	for _, webApp := range webAppList.Items {
-		if webApp.Spec.Owner.ComponentName == componentName && webApp.Spec.Owner.ProjectName == projectName {
-			s.logger.Debug("WebApplication already exists for component", "webApp", webApp.Name, "component", componentName)
+	// SAFE: Use index-based loop consistently
+	for i := range webAppList.Items {
+		if webAppList.Items[i].Spec.Owner.ComponentName == componentName && webAppList.Items[i].Spec.Owner.ProjectName == projectName {
+			s.logger.Debug("WebApplication already exists for component", "webApp", webAppList.Items[i].Name, "component", componentName)
 			return nil
 		}
 	}
@@ -1628,9 +1631,10 @@ func (s *ComponentService) createScheduledTaskResource(ctx context.Context, orgN
 	}
 
 	// Check if scheduled task already exists for this component
-	for _, scheduledTask := range scheduledTaskList.Items {
-		if scheduledTask.Spec.Owner.ComponentName == componentName && scheduledTask.Spec.Owner.ProjectName == projectName {
-			s.logger.Debug("ScheduledTask already exists for component", "scheduledTask", scheduledTask.Name, "component", componentName)
+	// SAFE: Use index-based loop consistently
+	for i := range scheduledTaskList.Items {
+		if scheduledTaskList.Items[i].Spec.Owner.ComponentName == componentName && scheduledTaskList.Items[i].Spec.Owner.ProjectName == projectName {
+			s.logger.Debug("ScheduledTask already exists for component", "scheduledTask", scheduledTaskList.Items[i].Name, "component", componentName)
 			return nil
 		}
 	}

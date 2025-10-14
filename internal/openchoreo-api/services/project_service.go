@@ -74,9 +74,10 @@ func (s *ProjectService) ListProjects(ctx context.Context, orgName string) ([]*m
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
 
+	// use index-based loop consistently
 	projects := make([]*models.ProjectResponse, 0, len(projectList.Items))
-	for _, item := range projectList.Items {
-		projects = append(projects, s.toProjectResponse(&item))
+	for i := range projectList.Items {
+		projects = append(projects, s.toProjectResponse(&projectList.Items[i]))
 	}
 
 	s.logger.Debug("Listed projects", "org", orgName, "count", len(projects))
