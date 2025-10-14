@@ -79,7 +79,7 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 		useCursor = true
 		// Only validate cursor params if we're actually using cursor mode
 		if cursor != "" || limitStr != "" {
-			if err := validateCursorModeParams(cursor, limitStr); err != nil {
+			if err := validateCursorModeParams(cursor); err != nil {
 				return "", 0, false, err
 			}
 		}
@@ -90,7 +90,7 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 	mode := query.Get("pagination")
 	if mode == "cursor" {
 		useCursor = true
-		if err := validateCursorModeParams(cursor, limitStr); err != nil {
+		if err := validateCursorModeParams(cursor); err != nil {
 			return "", 0, false, err
 		}
 	} else if mode == "legacy" {
@@ -106,7 +106,7 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 
 	if limitStr != "" {
 		if parsedLimit, parseErr := strconv.ParseInt(limitStr, 10, 64); parseErr != nil {
-			return "", 0, false, fmt.Errorf("invalid limit format: %v", parseErr)
+			return "", 0, false, fmt.Errorf("invalid limit format: %w", parseErr)
 		} else if parsedLimit <= 0 {
 			return "", 0, false, fmt.Errorf("limit must be positive, got: %d", parsedLimit)
 		} else if parsedLimit > MaxLimit {
@@ -120,7 +120,7 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 }
 
 // validateCursorModeParams validates cursor-specific parameters
-func validateCursorModeParams(cursor, limitStr string) error {
+func validateCursorModeParams(cursor string) error {
 	if cursor != "" {
 		if len(cursor) > MaxCursorLength {
 			return fmt.Errorf("cursor exceeds maximum allowed length of %d characters", MaxCursorLength)

@@ -82,7 +82,7 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if useCursor {
-		//only validate non-empty cursors
+		// only validate non-empty cursors
 		if cursor != "" {
 			if err := validateCursorWithContext(cursor); err != nil {
 				writeErrorResponse(w, http.StatusBadRequest,
