@@ -48,6 +48,8 @@ const (
 	CodeInternalError              = "INTERNAL_ERROR"
 	CodeContinueTokenExpired       = "CONTINUE_TOKEN_EXPIRED"
 	CodeInvalidCursorFormat        = "INVALID_CURSOR_FORMAT"
+	CodeMissingLimit               = "MISSING_LIMIT"
+	CodeInvalidPaginationMode      = "INVALID_PAGINATION_MODE"
 )
 
 // isExpiredTokenError checks if an error indicates an expired continue token

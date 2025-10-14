@@ -80,7 +80,11 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	// Check for cursor-based pagination
 	cursor, limit, useCursor, err := parseCursorParams(r)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, err.Error(), services.CodeInvalidInput)
+		errorCode := services.CodeInvalidInput
+		if strings.Contains(err.Error(), "invalid pagination mode") {
+			errorCode = services.CodeInvalidPaginationMode
+		}
+		writeErrorResponse(w, http.StatusBadRequest, err.Error(), errorCode)
 		return
 	}
 
@@ -97,7 +101,7 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 		// If cursor is provided but no limit, require explicit limit
 		if limit == 0 {
 			writeErrorResponse(w, http.StatusBadRequest,
-				"limit parameter is required when using cursor pagination", "MISSING_LIMIT")
+				"limit parameter is required when using cursor pagination", services.CodeMissingLimit)
 			return
 		}
 

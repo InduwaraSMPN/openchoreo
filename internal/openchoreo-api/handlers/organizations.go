@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/middleware/logger"
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/services"
@@ -21,7 +22,11 @@ func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 	// Check if cursor-based pagination is requested
 	cursor, limit, useCursor, err := parseCursorParams(r)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, err.Error(), services.CodeInvalidInput)
+		errorCode := services.CodeInvalidInput
+		if strings.Contains(err.Error(), "invalid pagination mode") {
+			errorCode = services.CodeInvalidPaginationMode
+		}
+		writeErrorResponse(w, http.StatusBadRequest, err.Error(), errorCode)
 		return
 	}
 
