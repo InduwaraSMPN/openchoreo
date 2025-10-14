@@ -26,8 +26,8 @@ type ListResponse[T any] struct {
 	PageSize   int     `json:"pageSize,omitempty"`
 	NextCursor *string `json:"nextCursor,omitempty"`
 	// NextCursor represents the cursor state for pagination with three possible values:
-	// - nil: No more pages available (end of results reached)
-	// - empty string (""): More pages available, but no cursor needed (typically first page or reset)
+	// - nil: No results at all (empty result set)
+	// - empty string (""): End of results reached with items available (pagination complete)
 	// - non-empty string: Cursor token to fetch the next page of results
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/openchoreo/openchoreo/internal/openchoreo-api/config"
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/models"
 )
 
@@ -63,15 +64,44 @@ func writeListResponse[T any](w http.ResponseWriter, items []T, total, page, pag
 	_ = json.NewEncoder(w).Encode(response) // Ignore encoding errors for response
 }
 
-// parseCursorParams parses cursor and limit parameters with security bounds
+// parseCursorParams parses cursor and limit parameters with security bounds and feature flags
 func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor bool, err error) {
 	query := r.URL.Query()
 
 	cursor = query.Get("cursor")
 	limitStr := query.Get("limit")
 
-	useCursor = cursor != "" || limitStr != ""
+	// FEATURE FLAG CONTROLLED: Base decision on feature flag
+	useCursor = false
 
+	// Primary control via feature flag
+	if config.GetCursorPaginationEnabled() {
+		useCursor = true
+		// Only validate cursor params if we're actually using cursor mode
+		if cursor != "" || limitStr != "" {
+			if err := validateCursorModeParams(cursor, limitStr); err != nil {
+				return "", 0, false, err
+			}
+		}
+	}
+
+	// For backward compatibility during transition period
+	// Allow explicit mode switch via query parameter
+	mode := query.Get("pagination")
+	if mode == "cursor" {
+		useCursor = true
+		if err := validateCursorModeParams(cursor, limitStr); err != nil {
+			return "", 0, false, err
+		}
+	} else if mode == "legacy" {
+		// Explicitly override feature flag for legacy mode
+		useCursor = false
+	} else if mode != "" {
+		// Invalid pagination mode specified
+		return "", 0, false, fmt.Errorf("invalid pagination mode: %s. Valid values are 'cursor' or 'legacy'", mode)
+	}
+
+	// SECURITY: Enforce reasonable limits to prevent DoS
 	limit = DefaultLimit
 
 	if limitStr != "" {
@@ -80,13 +110,27 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 		} else if parsedLimit <= 0 {
 			return "", 0, false, fmt.Errorf("limit must be positive, got: %d", parsedLimit)
 		} else if parsedLimit > MaxLimit {
-			limit = MaxLimit
+			limit = MaxLimit // Clamp to reasonable maximum
 		} else {
 			limit = parsedLimit
 		}
 	}
 
 	return cursor, limit, useCursor, nil
+}
+
+// validateCursorModeParams validates cursor-specific parameters
+func validateCursorModeParams(cursor, limitStr string) error {
+	if cursor != "" {
+		if len(cursor) > MaxCursorLength {
+			return fmt.Errorf("cursor exceeds maximum allowed length of %d characters", MaxCursorLength)
+		}
+	}
+
+	// limitStr is validated in the main parseCursorParams function
+	// This function can be extended to validate additional cursor-specific parameters in the future
+
+	return nil
 }
 
 // validateCursorWithContext validates the cursor string with security bounds
