@@ -77,6 +77,12 @@ func (s *OrganizationService) ListOrganizationsWithCursor(
 		if isExpiredTokenError(err) {
 			return nil, "", ErrContinueTokenExpired
 		}
+		if isInvalidCursorError(err) {
+			return nil, "", ErrInvalidCursorFormat
+		}
+		if isServiceUnavailableError(err) {
+			return nil, "", fmt.Errorf("service unavailable: %w", err)
+		}
 		return nil, "", fmt.Errorf("failed to list organizations: %w", err)
 	}
 

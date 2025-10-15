@@ -149,19 +149,6 @@ func (s *ComponentService) ListComponentsWithCursor(
 		"continue", continueToken,
 		"limit", limit)
 
-	project := &openchoreov1alpha1.Project{}
-	projectKey := client.ObjectKey{
-		Name:      projectName,
-		Namespace: orgName,
-	}
-
-	if err := s.k8sClient.Get(ctx, projectKey, project); err != nil {
-		if client.IgnoreNotFound(err) == nil {
-			return nil, "", ErrProjectNotFound
-		}
-		return nil, "", fmt.Errorf("failed to get project: %w", err)
-	}
-
 	var componentList openchoreov1alpha1.ComponentList
 
 	listOpts := []client.ListOption{
@@ -179,6 +166,12 @@ func (s *ComponentService) ListComponentsWithCursor(
 	if err := s.k8sClient.List(ctx, &componentList, listOpts...); err != nil {
 		if isExpiredTokenError(err) {
 			return nil, "", ErrContinueTokenExpired
+		}
+		if isInvalidCursorError(err) {
+			return nil, "", ErrInvalidCursorFormat
+		}
+		if isServiceUnavailableError(err) {
+			return nil, "", fmt.Errorf("service unavailable: %w", err)
 		}
 		return nil, "", fmt.Errorf("failed to list components: %w", err)
 	}

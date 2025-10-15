@@ -96,15 +96,6 @@ func (s *ProjectService) ListProjectsWithCursor(
 		"continue", continueToken,
 		"limit", limit)
 
-	// Verify organization exists
-	org := &openchoreov1alpha1.Organization{}
-	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: orgName}, org); err != nil {
-		if client.IgnoreNotFound(err) == nil {
-			return nil, "", ErrOrganizationNotFound
-		}
-		return nil, "", fmt.Errorf("failed to get organization: %w", err)
-	}
-
 	var projectList openchoreov1alpha1.ProjectList
 
 	// List projects filtered by organization
@@ -123,6 +114,12 @@ func (s *ProjectService) ListProjectsWithCursor(
 		// Check if continue token expired
 		if isExpiredTokenError(err) {
 			return nil, "", ErrContinueTokenExpired
+		}
+		if isInvalidCursorError(err) {
+			return nil, "", ErrInvalidCursorFormat
+		}
+		if isServiceUnavailableError(err) {
+			return nil, "", fmt.Errorf("service unavailable: %w", err)
 		}
 		return nil, "", fmt.Errorf("failed to list projects: %w", err)
 	}
