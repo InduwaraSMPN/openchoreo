@@ -98,13 +98,6 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// If cursor is provided but no limit, require explicit limit
-		if limit == 0 {
-			writeErrorResponse(w, http.StatusBadRequest,
-				"limit parameter is required when using cursor pagination", services.CodeMissingLimit)
-			return
-		}
-
 		components, nextCursor, err := h.services.ComponentService.ListComponentsWithCursor(
 			ctx, orgName, projectName, cursor, limit)
 		if err != nil {
@@ -115,6 +108,16 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 			}
 			if errors.Is(err, services.ErrContinueTokenExpired) {
 				writeTokenExpiredError(w)
+				return
+			}
+			if errors.Is(err, services.ErrInvalidCursorFormat) {
+				writeErrorResponse(w, http.StatusBadRequest,
+					fmt.Sprintf("Invalid cursor format: %v", err), services.CodeInvalidCursorFormat)
+				return
+			}
+			if strings.Contains(err.Error(), "service unavailable") {
+				writeErrorResponse(w, http.StatusServiceUnavailable,
+					"Service temporarily unavailable", services.CodeInternalError)
 				return
 			}
 			logger.Error("Failed to list components with cursor", "error", err)

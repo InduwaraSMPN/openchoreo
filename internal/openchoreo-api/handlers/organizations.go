@@ -53,6 +53,16 @@ func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 				writeTokenExpiredError(w)
 				return
 			}
+			if errors.Is(err, services.ErrInvalidCursorFormat) {
+				writeErrorResponse(w, http.StatusBadRequest,
+					fmt.Sprintf("Invalid cursor format: %v", err), services.CodeInvalidCursorFormat)
+				return
+			}
+			if strings.Contains(err.Error(), "service unavailable") {
+				writeErrorResponse(w, http.StatusServiceUnavailable,
+					"Service temporarily unavailable", services.CodeInternalError)
+				return
+			}
 			logger.Error("Failed to list organizations with cursor", "error", err)
 			writeErrorResponse(w, http.StatusInternalServerError,
 				"Failed to list organizations", services.CodeInternalError)
