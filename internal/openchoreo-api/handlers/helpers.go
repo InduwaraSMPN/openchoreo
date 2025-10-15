@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/config"
 	"github.com/openchoreo/openchoreo/internal/openchoreo-api/models"
@@ -76,40 +77,41 @@ func writeListResponse[T any](w http.ResponseWriter, items []T, total, page, pag
 }
 
 // parseCursorParams parses cursor and limit parameters with security bounds and feature flags
+//
+// Pagination Mode Precedence (highest to lowest):
+// 1. Explicit ?pagination=cursor or ?pagination=legacy parameter
+// 2. Presence of ?cursor parameter (enables cursor mode)
+// 3. Feature flag config.GetCursorPaginationEnabled()
+// 4. Default: legacy mode (useCursor=false)
 func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor bool, err error) {
 	query := r.URL.Query()
 
 	cursor = query.Get("cursor")
 	limitStr := query.Get("limit")
-
-	// FEATURE FLAG CONTROLLED: Base decision on feature flag
-	useCursor = false
-
-	// Enable cursor mode if feature flag is on OR if client is already using cursor params
-	if config.GetCursorPaginationEnabled() || cursor != "" {
-		useCursor = true
-		// Only validate cursor params if we're actually using cursor mode
-		if cursor != "" || limitStr != "" {
-			if err := validateCursorModeParams(cursor); err != nil {
-				return "", 0, false, err
-			}
-		}
-	}
-
-	// For backward compatibility during transition period
-	// Allow explicit mode switch via query parameter
 	mode := query.Get("pagination")
+
+	// Determine pagination mode using precedence rules
+	// Precedence 1: Explicit mode parameter overrides everything
 	if mode == "cursor" {
 		useCursor = true
-		if err := validateCursorModeParams(cursor); err != nil {
-			return "", 0, false, err
-		}
 	} else if mode == "legacy" {
-		// Explicitly override feature flag for legacy mode
 		useCursor = false
 	} else if mode != "" {
 		// Invalid pagination mode specified
 		return "", 0, false, fmt.Errorf("invalid pagination mode: %s. Valid values are 'cursor' or 'legacy'", mode)
+	} else if cursor != "" {
+		// Precedence 2: Presence of cursor parameter enables cursor mode
+		useCursor = true
+	} else {
+		// Precedence 3: Feature flag determines default behavior
+		useCursor = config.GetCursorPaginationEnabled()
+	}
+
+	// Validate cursor if we're using cursor mode
+	if useCursor {
+		if err := validateCursorModeParams(cursor); err != nil {
+			return "", 0, false, err
+		}
 	}
 
 	// SECURITY: Enforce reasonable limits to prevent DoS
@@ -223,42 +225,7 @@ func isValidContinueToken(token string) bool {
 
 // isValidUTF8 checks if the byte slice is valid UTF-8
 func isValidUTF8(b []byte) bool {
-	for i := 0; i < len(b); {
-		if b[i] < 0x80 {
-			i++
-			continue
-		}
-
-		// Multi-byte UTF-8 character
-		if b[i] < 0xC0 || b[i] >= 0xF8 {
-			return false
-		}
-
-		// 2-byte sequence
-		if b[i] < 0xE0 {
-			if i+1 >= len(b) || (b[i+1]&0xC0) != 0x80 {
-				return false
-			}
-			i += 2
-			continue
-		}
-
-		// 3-byte sequence
-		if b[i] < 0xF0 {
-			if i+2 >= len(b) || (b[i+1]&0xC0) != 0x80 || (b[i+2]&0xC0) != 0x80 {
-				return false
-			}
-			i += 3
-			continue
-		}
-
-		// 4-byte sequence
-		if i+3 >= len(b) || (b[i+1]&0xC0) != 0x80 || (b[i+2]&0xC0) != 0x80 || (b[i+3]&0xC0) != 0x80 {
-			return false
-		}
-		i += 4
-	}
-	return true
+	return utf8.Valid(b)
 }
 
 func writeCursorListResponse[T any](w http.ResponseWriter, items []T, nextCursor string) {
