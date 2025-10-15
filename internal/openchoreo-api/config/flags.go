@@ -5,9 +5,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
+
+	"golang.org/x/exp/slog"
 )
 
 // FeatureFlags contains feature flag configuration
@@ -55,16 +59,22 @@ func LoadFeatureFlags() (*Config, error) {
 		},
 	}
 
-	// Load from environment variable first (highest priority)
-	if envValue := os.Getenv("CURSOR_PAGINATION_ENABLED"); envValue != "" {
-		config.Features.CursorPaginationEnabled = envValue == "true"
-	}
-
 	// Load from config file if it exists
 	if err := loadFromFile("config/flags.json", config); err != nil {
-		// Log warning but continue with defaults/env vars
-		// In a real implementation, you'd use proper logging
-		_ = err
+		if errors.Is(err, os.ErrNotExist) {
+			slog.Warn("config file not loaded, using defaults/env vars",
+				"error", err,
+				"file", "config/flags.json")
+		} else {
+			return config, fmt.Errorf("load feature flags from file: %w", err)
+		}
+	} else {
+		slog.Info("feature flags loaded from file", "file", "config/flags.json")
+	}
+
+	// Environment variables override file configuration
+	if envValue, ok := os.LookupEnv("CURSOR_PAGINATION_ENABLED"); ok {
+		config.Features.CursorPaginationEnabled = envValue == "true"
 	}
 
 	globalConfig = config
