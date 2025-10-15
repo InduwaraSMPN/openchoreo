@@ -122,7 +122,8 @@ func (s *ComponentService) ListComponents(ctx context.Context, orgName, projectN
 		return nil, fmt.Errorf("failed to list components: %w", err)
 	}
 
-	// use index-based loop consistently
+	// Use index to get stable pointer to slice element (not loop variable)
+	// This prevents pointer aliasing issues where range copies the value
 	components := make([]*models.ComponentResponse, 0, len(componentList.Items))
 	for i := range componentList.Items {
 		// Only include components that belong to the specified project
@@ -136,6 +137,9 @@ func (s *ComponentService) ListComponents(ctx context.Context, orgName, projectN
 }
 
 // ListComponentsWithCursor lists components for a project with cursor-based pagination
+// Note: continueToken is validated at the handler layer before reaching this service.
+// The Kubernetes API server performs additional validation and will return appropriate
+// errors if the token is malformed or expired, which are handled below.
 func (s *ComponentService) ListComponentsWithCursor(
 	ctx context.Context,
 	orgName string,
@@ -1542,7 +1546,7 @@ func (s *ComponentService) createServiceResource(ctx context.Context, orgName, p
 	}
 
 	// Check if service already exists for this component
-	// SAFE: Use index-based loop consistently
+	// Use index to get stable pointer to slice element (not loop variable)
 	for i := range serviceList.Items {
 		if serviceList.Items[i].Spec.Owner.ComponentName == componentName && serviceList.Items[i].Spec.Owner.ProjectName == projectName {
 			s.logger.Debug("Service already exists for component", "service", serviceList.Items[i].Name, "component", componentName)
@@ -1583,7 +1587,7 @@ func (s *ComponentService) createWebApplicationResource(ctx context.Context, org
 	}
 
 	// Check if web application already exists for this component
-	// SAFE: Use index-based loop consistently
+	// Use index to get stable pointer to slice element (not loop variable)
 	for i := range webAppList.Items {
 		if webAppList.Items[i].Spec.Owner.ComponentName == componentName && webAppList.Items[i].Spec.Owner.ProjectName == projectName {
 			s.logger.Debug("WebApplication already exists for component", "webApp", webAppList.Items[i].Name, "component", componentName)
@@ -1624,7 +1628,7 @@ func (s *ComponentService) createScheduledTaskResource(ctx context.Context, orgN
 	}
 
 	// Check if scheduled task already exists for this component
-	// SAFE: Use index-based loop consistently
+	// Use index to get stable pointer to slice element (not loop variable)
 	for i := range scheduledTaskList.Items {
 		if scheduledTaskList.Items[i].Spec.Owner.ComponentName == componentName && scheduledTaskList.Items[i].Spec.Owner.ProjectName == projectName {
 			s.logger.Debug("ScheduledTask already exists for component", "scheduledTask", scheduledTaskList.Items[i].Name, "component", componentName)

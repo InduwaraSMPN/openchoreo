@@ -40,7 +40,8 @@ func (s *OrganizationService) ListOrganizations(ctx context.Context) ([]*models.
 		return nil, fmt.Errorf("failed to list organizations: %w", err)
 	}
 
-	// use index-based loop consistently
+	// Use index to get stable pointer to slice element (not loop variable)
+	// This prevents pointer aliasing issues where range copies the value
 	organizations := make([]*models.OrganizationResponse, 0, len(orgList.Items))
 	for i := range orgList.Items {
 		organizations = append(organizations, s.toOrganizationResponse(&orgList.Items[i]))
@@ -51,6 +52,9 @@ func (s *OrganizationService) ListOrganizations(ctx context.Context) ([]*models.
 }
 
 // ListOrganizationsWithCursor lists organizations with cursor-based pagination
+// Note: continueToken is validated at the handler layer before reaching this service.
+// The Kubernetes API server performs additional validation and will return appropriate
+// errors if the token is malformed or expired, which are handled below.
 func (s *OrganizationService) ListOrganizationsWithCursor(
 	ctx context.Context,
 	continueToken string,

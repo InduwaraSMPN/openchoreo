@@ -74,7 +74,8 @@ func (s *ProjectService) ListProjects(ctx context.Context, orgName string) ([]*m
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
 
-	// use index-based loop consistently
+	// Use index to get stable pointer to slice element (not loop variable)
+	// This prevents pointer aliasing issues where range copies the value
 	projects := make([]*models.ProjectResponse, 0, len(projectList.Items))
 	for i := range projectList.Items {
 		projects = append(projects, s.toProjectResponse(&projectList.Items[i]))
@@ -85,6 +86,9 @@ func (s *ProjectService) ListProjects(ctx context.Context, orgName string) ([]*m
 }
 
 // ListProjectsWithCursor lists projects for an org with cursor-based pagination
+// Note: continueToken is validated at the handler layer before reaching this service.
+// The Kubernetes API server performs additional validation and will return appropriate
+// errors if the token is malformed or expired, which are handled below.
 func (s *ProjectService) ListProjectsWithCursor(
 	ctx context.Context,
 	orgName string,
