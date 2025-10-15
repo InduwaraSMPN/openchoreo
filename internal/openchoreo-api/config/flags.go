@@ -4,11 +4,13 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/slog"
@@ -31,24 +33,48 @@ var (
 	configMutex  sync.RWMutex
 	lastLoadTime time.Time
 	cacheTTL     = 5 * time.Minute // Cache config for 5 minutes
+	reloadInProgress atomic.Bool
+	reloadWaitGroup  sync.WaitGroup
 )
 
 // LoadFeatureFlags loads the feature flags configuration
 func LoadFeatureFlags() (*Config, error) {
+	// Fast path: Check cache with read lock
 	configMutex.RLock()
-
-	// Return cached config if still fresh
-	if globalConfig != nil && time.Since(lastLoadTime) < cacheTTL {
-		defer configMutex.RUnlock()
-		return globalConfig, nil
-	}
+	cachedConfig := globalConfig
+	loadTime := lastLoadTime
 	configMutex.RUnlock()
 
-	// Acquire write lock to reload config
+	// Return cached config if still fresh
+	if cachedConfig != nil && time.Since(loadTime) < cacheTTL {
+		return cachedConfig, nil
+	}
+
+	// SECURITY: Use atomic CAS to ensure only ONE reload happens
+	// This prevents thundering herd DoS during cache expiration
+	if !reloadInProgress.CompareAndSwap(false, true) {
+		// Another goroutine is reloading, wait for it
+		reloadWaitGroup.Wait()
+
+		// Re-check cache after waiting
+		configMutex.RLock()
+		reloadedConfig := globalConfig
+		configMutex.RUnlock()
+		return reloadedConfig, nil
+	}
+
+	// We won the race, we're responsible for reloading
+	reloadWaitGroup.Add(1)
+	defer func() {
+		reloadInProgress.Store(false)
+		reloadWaitGroup.Done()
+	}()
+
+	// Acquire write lock for reload
 	configMutex.Lock()
 	defer configMutex.Unlock()
 
-	// Double-check after acquiring write lock
+	// Final check after acquiring write lock (might have been updated)
 	if globalConfig != nil && time.Since(lastLoadTime) < cacheTTL {
 		return globalConfig, nil
 	}
@@ -59,10 +85,18 @@ func LoadFeatureFlags() (*Config, error) {
 		},
 	}
 
+	// SECURITY: Add timeout for file operations to prevent DoS
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
 	// Load from config file if it exists
-	if err := loadFromFile("config/flags.json", config); err != nil {
+	if err := loadFromFileWithContext(ctx, "config/flags.json", config); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			slog.Warn("config file not loaded, using defaults/env vars",
+				"error", err,
+				"file", "config/flags.json")
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			slog.Error("config file load timeout, using defaults/env vars",
 				"error", err,
 				"file", "config/flags.json")
 		} else {
@@ -91,6 +125,31 @@ func loadFromFile(filename string, config *Config) error {
 	}
 
 	return json.Unmarshal(data, config)
+}
+
+// loadFromFileWithContext loads configuration from a JSON file with timeout protection
+func loadFromFileWithContext(ctx context.Context, filename string, config *Config) error {
+	type result struct {
+		data []byte
+		err  error
+	}
+
+	resultChan := make(chan result, 1)
+
+	go func() {
+		data, err := os.ReadFile(filename)
+		resultChan <- result{data: data, err: err}
+	}()
+
+	select {
+	case res := <-resultChan:
+		if res.err != nil {
+			return res.err
+		}
+		return json.Unmarshal(res.data, config)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // GetCursorPaginationEnabled returns the current state of the cursor pagination flag
