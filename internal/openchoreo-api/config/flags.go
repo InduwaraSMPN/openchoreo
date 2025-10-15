@@ -65,10 +65,8 @@ func LoadFeatureFlags() (*Config, error) {
 
 	// We won the race, we're responsible for reloading
 	reloadWaitGroup.Add(1)
-	defer func() {
-		reloadInProgress.Store(false)
-		reloadWaitGroup.Done()
-	}()
+	defer reloadWaitGroup.Done()        // CRITICAL: Defer immediately after Add to prevent deadlock on panic
+	defer reloadInProgress.Store(false) // Execute before Done() due to LIFO defer order
 
 	// Acquire write lock for reload
 	configMutex.Lock()
