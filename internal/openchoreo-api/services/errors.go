@@ -28,6 +28,7 @@ var (
 	ErrContinueTokenExpired       = errors.New("continue token has expired")
 	ErrInvalidCursorFormat        = errors.New("invalid cursor format")
 	ErrResourceNotFound           = errors.New("resource not found")
+	ErrInvalidPaginationMode      = errors.New("invalid pagination mode")
 )
 
 // Error codes for API responses
@@ -92,4 +93,25 @@ func isServiceUnavailableError(err error) bool {
 
 	// Check if it's a K8s ServiceUnavailable error (503 status)
 	return apierrors.IsServiceUnavailable(err)
+}
+
+// GetPaginationErrorCode returns the appropriate error code for pagination errors
+func GetPaginationErrorCode(err error) string {
+	if err == nil {
+		return CodeInvalidInput
+	}
+
+	// Check for specific pagination errors
+	if errors.Is(err, ErrInvalidPaginationMode) {
+		return CodeInvalidPaginationMode
+	}
+
+	// Check by error message content for backward compatibility
+	errMsg := strings.ToLower(err.Error())
+	if strings.Contains(errMsg, "invalid pagination mode") {
+		return CodeInvalidPaginationMode
+	}
+
+	// Default to generic invalid input
+	return CodeInvalidInput
 }

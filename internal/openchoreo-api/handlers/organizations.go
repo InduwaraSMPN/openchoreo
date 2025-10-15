@@ -21,10 +21,7 @@ func (h *Handler) ListOrganizations(w http.ResponseWriter, r *http.Request) {
 	// Check if cursor-based pagination is requested
 	cursor, limit, useCursor, err := parseCursorParams(r)
 	if err != nil {
-		errorCode := services.CodeInvalidInput
-		if strings.Contains(err.Error(), "invalid pagination mode") {
-			errorCode = services.CodeInvalidPaginationMode
-		}
+		errorCode := services.GetPaginationErrorCode(err)
 		writeErrorResponse(w, http.StatusBadRequest, err.Error(), errorCode)
 		return
 	}

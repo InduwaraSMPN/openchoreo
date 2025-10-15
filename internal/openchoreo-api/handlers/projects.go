@@ -65,17 +65,14 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	if orgName == "" {
 		logger.Warn("Organization name is required")
 		writeErrorResponse(w, http.StatusBadRequest,
-			"Organization name is required", "INVALID_PARAMS")
+			"Organization name is required", services.CodeInvalidInput)
 		return
 	}
 
 	// Check for cursor-based pagination
 	cursor, limit, useCursor, err := parseCursorParams(r)
 	if err != nil {
-		errorCode := services.CodeInvalidInput
-		if strings.Contains(err.Error(), "invalid pagination mode") {
-			errorCode = services.CodeInvalidPaginationMode
-		}
+		errorCode := services.GetPaginationErrorCode(err)
 		writeErrorResponse(w, http.StatusBadRequest, err.Error(), errorCode)
 		return
 	}

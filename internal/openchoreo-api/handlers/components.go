@@ -72,17 +72,14 @@ func (h *Handler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	if orgName == "" || projectName == "" {
 		logger.Warn("Organization and project names are required")
 		writeErrorResponse(w, http.StatusBadRequest,
-			"Organization and project names are required", "INVALID_PARAMS")
+			"Organization and project names are required", services.CodeInvalidInput)
 		return
 	}
 
 	// Check for cursor-based pagination
 	cursor, limit, useCursor, err := parseCursorParams(r)
 	if err != nil {
-		errorCode := services.CodeInvalidInput
-		if strings.Contains(err.Error(), "invalid pagination mode") {
-			errorCode = services.CodeInvalidPaginationMode
-		}
+		errorCode := services.GetPaginationErrorCode(err)
 		writeErrorResponse(w, http.StatusBadRequest, err.Error(), errorCode)
 		return
 	}
