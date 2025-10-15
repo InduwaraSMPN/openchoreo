@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 const (
 	DefaultLimit    = 16
 	MaxLimit        = 1024 // Standard maximum 1024 items per page
-	MaxCursorLength = 8192 // Kubernetes API Server's default maximum URL length
+	MaxCursorLength = 1024 // Kubernetes API Server's default maximum URL length is 8KB (8192 characters
 )
 
 // writeSuccessResponse writes a successful API response
@@ -74,8 +75,8 @@ func parseCursorParams(r *http.Request) (cursor string, limit int64, useCursor b
 	// FEATURE FLAG CONTROLLED: Base decision on feature flag
 	useCursor = false
 
-	// Primary control via feature flag
-	if config.GetCursorPaginationEnabled() {
+	// Enable cursor mode if feature flag is on OR if client is already using cursor params
+	if config.GetCursorPaginationEnabled() || cursor != "" {
 		useCursor = true
 		// Only validate cursor params if we're actually using cursor mode
 		if cursor != "" || limitStr != "" {
@@ -151,10 +152,23 @@ func validateCursorWithContext(cursor string) error {
 }
 
 func isValidContinueToken(token string) bool {
-	// manual character validation loop is intentionally used here to mitigate regex compilation overhead.
+	if len(token) > MaxCursorLength {
+		return false
+	}
+
+	// 1. Check character set (existing validation)
 	for i := 0; i < len(token); i++ {
 		c := token[i]
 		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=' || c == '-' || c == '_') {
+			return false
+		}
+	}
+
+	// 2. Validate it's actually valid base64
+	_, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		_, err = base64.URLEncoding.DecodeString(token)
+		if err != nil {
 			return false
 		}
 	}
@@ -171,8 +185,8 @@ func writeCursorListResponse[T any](w http.ResponseWriter, items []T, nextCursor
 	if nextCursor != "" {
 		// State 1: More pages available - return the token
 		nextCursorPtr = &nextCursor
-	} else if len(items) > 0 {
-		// State 2: End of results - return empty string
+	} else {
+		// State 2: Pagination complete - always return empty string for consistency
 		// This tells clients "pagination is complete"
 		emptyCursor := ""
 		nextCursorPtr = &emptyCursor
