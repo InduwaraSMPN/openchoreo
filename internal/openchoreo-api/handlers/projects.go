@@ -6,7 +6,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -85,8 +84,9 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		// only validate non-empty cursors
 		if cursor != "" {
 			if err := validateCursorWithContext(cursor); err != nil {
+				logger.Warn("Invalid cursor", "error", err, "ip", r.RemoteAddr)
 				writeErrorResponse(w, http.StatusBadRequest,
-					fmt.Sprintf("Invalid cursor: %v", err), services.CodeInvalidCursorFormat)
+					"Invalid cursor parameter", services.CodeInvalidCursorFormat)
 				return
 			}
 		}
@@ -104,8 +104,9 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if errors.Is(err, services.ErrInvalidCursorFormat) {
+				logger.Error("Invalid cursor format", "error", err, "ip", r.RemoteAddr)
 				writeErrorResponse(w, http.StatusBadRequest,
-					fmt.Sprintf("Invalid cursor format: %v", err), services.CodeInvalidCursorFormat)
+					"Invalid cursor format", services.CodeInvalidCursorFormat)
 				return
 			}
 			if strings.Contains(err.Error(), "service unavailable") {
