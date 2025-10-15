@@ -4,6 +4,7 @@
 package handlers
 
 import (
+    "encoding/base64"
 	"fmt"
 	"net/http/httptest"
 	"strings"
@@ -56,18 +57,18 @@ func TestParseCursorParams(t *testing.T) {
 		},
 		{
 			name:              "feature enabled, cursor param present",
-			url:               "/api/v1/orgs?cursor=abc123",
+			url:               "/api/v1/orgs?cursor=SGVsbG8gV29ybGQ=", // "Hello World" in base64
 			featureEnabled:    true,
-			expectedCursor:    "abc123",
+			expectedCursor:    "SGVsbG8gV29ybGQ=",
 			expectedLimit:     DefaultLimit,
 			expectedUseCursor: true,
 			expectError:       false,
 		},
 		{
 			name:              "feature disabled, cursor param forces cursor mode",
-			url:               "/api/v1/orgs?cursor=abc123",
+			url:               "/api/v1/orgs?cursor=SGVsbG8gV29ybGQ=", // "Hello World" in base64
 			featureEnabled:    false,
-			expectedCursor:    "abc123",
+			expectedCursor:    "SGVsbG8gV29ybGQ=",
 			expectedLimit:     DefaultLimit,
 			expectedUseCursor: true,
 			expectError:       false,
@@ -204,12 +205,13 @@ func TestValidateCursorModeParams(t *testing.T) {
 		},
 		{
 			name:        "valid cursor length",
-			cursor:      "abc123",
+			cursor:      "SGVsbG8gV29ybGQ=", // "Hello World" in base64
 			expectError: false,
 		},
 		{
-			name:        "max length allowed",
-			cursor:      strings.Repeat("a", MaxCursorLength),
+			name: "max length allowed",
+			// Create a valid base64 string that's within limits when decoded
+			cursor:      "eyJ2ZXJzaW9uIjoxLCJjb250aW51ZSI6InRlc3QiLCJydiI6IjEyMzQ1In0=", // Valid JSON in base64
 			expectError: false,
 		},
 		{
@@ -321,7 +323,7 @@ func TestIsValidContinueToken(t *testing.T) {
 		},
 		{
 			name:  "valid chars but invalid base64",
-			token: "AAAAAAA",
+			token: "AAAAAAA", // 7 chars, not valid base64 padding
 			valid: false,
 		},
 		{
@@ -339,4 +341,20 @@ func TestIsValidContinueToken(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateCursorContentSecurity(t *testing.T) {
+    // Null byte in decoded content should be rejected
+    // base64 of "A\x00B"
+    cursorWithNull := "QQBC" // Decodes to A\x00B
+    if err := validateCursor(cursorWithNull); err == nil {
+        t.Fatalf("expected null-byte cursor to be invalid")
+    }
+
+    // Decoded content exceeding MaxDecodedCursorLength should be rejected
+    decoded := []byte(strings.Repeat("A", MaxDecodedCursorLength+1))
+    encoded := base64.StdEncoding.EncodeToString(decoded)
+    if err := validateCursor(encoded); err == nil {
+        t.Fatalf("expected decoded-length-exceeding cursor to be invalid")
+    }
 }
