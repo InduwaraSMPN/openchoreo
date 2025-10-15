@@ -67,3 +67,29 @@ func isExpiredTokenError(err error) bool {
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "continue token") && strings.Contains(errMsg, "expired")
 }
+
+// isInvalidCursorError checks if an error indicates an invalid cursor format
+func isInvalidCursorError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a K8s BadRequest error (400 status)
+	if apierrors.IsBadRequest(err) {
+		return true
+	}
+
+	// Check for specific cursor/token validation error messages
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "invalid") && (strings.Contains(errMsg, "cursor") || strings.Contains(errMsg, "token"))
+}
+
+// isServiceUnavailableError checks if an error indicates service unavailability
+func isServiceUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a K8s ServiceUnavailable error (503 status)
+	return apierrors.IsServiceUnavailable(err)
+}
