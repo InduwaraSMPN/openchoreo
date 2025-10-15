@@ -29,10 +29,10 @@ type Config struct {
 }
 
 var (
-	globalConfig *Config
-	configMutex  sync.RWMutex
-	lastLoadTime time.Time
-	cacheTTL     = 5 * time.Minute // Cache config for 5 minutes
+	globalConfig     *Config
+	configMutex      sync.RWMutex
+	lastLoadTime     time.Time
+	cacheTTL         = 5 * time.Minute // Cache config for 5 minutes
 	reloadInProgress atomic.Bool
 	reloadWaitGroup  sync.WaitGroup
 )
@@ -115,16 +115,6 @@ func LoadFeatureFlags() (*Config, error) {
 	lastLoadTime = time.Now()
 
 	return config, nil
-}
-
-// loadFromFile loads configuration from a JSON file
-func loadFromFile(filename string, config *Config) error {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, config)
 }
 
 // loadFromFileWithContext loads configuration from a JSON file with timeout protection

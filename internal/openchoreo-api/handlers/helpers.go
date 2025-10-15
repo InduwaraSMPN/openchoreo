@@ -16,8 +16,8 @@ import (
 
 const (
 	DefaultLimit           = 16
-    MaxLimit               = 1024 // Reduced maximum items per page to limit DoS impact
-	MaxCursorLength        = 512 // Kubernetes API Server's default maximum URL length is 8KB (8192 characters)
+	MaxLimit               = 1024 // Reduced maximum items per page to limit DoS impact
+	MaxCursorLength        = 512  // Kubernetes API Server's default maximum URL length is 8KB (8192 characters)
 	MaxDecodedCursorLength = 512  // Maximum decoded cursor content size
 )
 
@@ -143,7 +143,7 @@ func validateCursor(cursor string) error {
 		return fmt.Errorf("cursor exceeds maximum allowed length of %d characters", MaxCursorLength)
 	}
 
-    // 2. Base64 decode validation
+	// 2. Base64 decode validation
 	decoded, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
 		decoded, err = base64.URLEncoding.DecodeString(cursor)
@@ -152,7 +152,7 @@ func validateCursor(cursor string) error {
 		}
 	}
 
-    // 3. SECURITY: Validate decoded content
+	// 3. SECURITY: Validate decoded content
 	// Check for null bytes (binary injection prevention)
 	for _, b := range decoded {
 		if b == 0x00 {
@@ -160,12 +160,12 @@ func validateCursor(cursor string) error {
 		}
 	}
 
-    // 4. Validate decoded length
+	// 4. Validate decoded length
 	if len(decoded) > MaxDecodedCursorLength {
 		return fmt.Errorf("cursor exceeds maximum decoded size of %d bytes", MaxDecodedCursorLength)
 	}
 
-    // 5. Validate UTF-8 encoding (content sanity check)
+	// 5. Validate UTF-8 encoding (content sanity check)
 	if len(decoded) > 0 && !isValidUTF8(decoded) {
 		return fmt.Errorf("cursor format is invalid: not valid UTF-8")
 	}
@@ -190,7 +190,7 @@ func isValidContinueToken(token string) bool {
 		return false
 	}
 
-    // 1. Validate it's actually valid base64 and decode
+	// 1. Validate it's actually valid base64 and decode
 	decoded, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		decoded, err = base64.URLEncoding.DecodeString(token)
@@ -199,7 +199,7 @@ func isValidContinueToken(token string) bool {
 		}
 	}
 
-    // 2. SECURITY: Validate decoded content
+	// 2. SECURITY: Validate decoded content
 	// Check for null bytes (binary injection prevention)
 	for _, b := range decoded {
 		if b == 0x00 {
@@ -207,12 +207,12 @@ func isValidContinueToken(token string) bool {
 		}
 	}
 
-    // 3. Validate decoded length
+	// 3. Validate decoded length
 	if len(decoded) > MaxDecodedCursorLength {
 		return false
 	}
 
-    // 4. Validate UTF-8 encoding (content sanity check)
+	// 4. Validate UTF-8 encoding (content sanity check)
 	// Kubernetes continue tokens should be valid UTF-8
 	if len(decoded) > 0 && !isValidUTF8(decoded) {
 		return false
@@ -228,12 +228,12 @@ func isValidUTF8(b []byte) bool {
 			i++
 			continue
 		}
-		
+
 		// Multi-byte UTF-8 character
 		if b[i] < 0xC0 || b[i] >= 0xF8 {
 			return false
 		}
-		
+
 		// 2-byte sequence
 		if b[i] < 0xE0 {
 			if i+1 >= len(b) || (b[i+1]&0xC0) != 0x80 {
@@ -242,7 +242,7 @@ func isValidUTF8(b []byte) bool {
 			i += 2
 			continue
 		}
-		
+
 		// 3-byte sequence
 		if b[i] < 0xF0 {
 			if i+2 >= len(b) || (b[i+1]&0xC0) != 0x80 || (b[i+2]&0xC0) != 0x80 {
@@ -251,7 +251,7 @@ func isValidUTF8(b []byte) bool {
 			i += 3
 			continue
 		}
-		
+
 		// 4-byte sequence
 		if i+3 >= len(b) || (b[i+1]&0xC0) != 0x80 || (b[i+2]&0xC0) != 0x80 || (b[i+3]&0xC0) != 0x80 {
 			return false

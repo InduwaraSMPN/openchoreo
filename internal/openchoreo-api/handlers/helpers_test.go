@@ -4,7 +4,7 @@
 package handlers
 
 import (
-    "encoding/base64"
+	"encoding/base64"
 	"fmt"
 	"net/http/httptest"
 	"strings"
@@ -344,17 +344,17 @@ func TestIsValidContinueToken(t *testing.T) {
 }
 
 func TestValidateCursorContentSecurity(t *testing.T) {
-    // Null byte in decoded content should be rejected
-    // base64 of "A\x00B"
-    cursorWithNull := "QQBC" // Decodes to A\x00B
-    if err := validateCursor(cursorWithNull); err == nil {
-        t.Fatalf("expected null-byte cursor to be invalid")
-    }
+	// Null byte in decoded content should be rejected
+	// base64 of "A\x00B"
+	cursorWithNull := "QQBC" // Decodes to A\x00B
+	if err := validateCursor(cursorWithNull); err == nil {
+		t.Fatalf("expected null-byte cursor to be invalid")
+	}
 
-    // Decoded content exceeding MaxDecodedCursorLength should be rejected
-    decoded := []byte(strings.Repeat("A", MaxDecodedCursorLength+1))
-    encoded := base64.StdEncoding.EncodeToString(decoded)
-    if err := validateCursor(encoded); err == nil {
-        t.Fatalf("expected decoded-length-exceeding cursor to be invalid")
-    }
+	// Decoded content exceeding MaxDecodedCursorLength should be rejected
+	decoded := []byte(strings.Repeat("A", MaxDecodedCursorLength+1))
+	encoded := base64.StdEncoding.EncodeToString(decoded)
+	if err := validateCursor(encoded); err == nil {
+		t.Fatalf("expected decoded-length-exceeding cursor to be invalid")
+	}
 }

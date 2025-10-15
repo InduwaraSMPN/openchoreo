@@ -22,7 +22,7 @@ func TestLoadFeatureFlags(t *testing.T) {
 
 	t.Cleanup(func() {
 		if hadOriginal {
-			if writeErr := os.WriteFile(configPath, originalData, 0o644); writeErr != nil {
+			if writeErr := os.WriteFile(configPath, originalData, 0o600); writeErr != nil {
 				t.Fatalf("failed to restore config file: %v", writeErr)
 			}
 		} else if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
@@ -37,7 +37,7 @@ func TestLoadFeatureFlags(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 			t.Fatalf("failed to create config directory: %v", err)
 		}
-		if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 			t.Fatalf("failed to write config file: %v", err)
 		}
 	}
