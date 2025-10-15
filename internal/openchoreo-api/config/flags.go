@@ -127,8 +127,22 @@ func loadFromFileWithContext(ctx context.Context, filename string, config *Confi
 	resultChan := make(chan result, 1)
 
 	go func() {
+		// Check context before expensive operation to avoid unnecessary work
+		select {
+		case <-ctx.Done():
+			resultChan <- result{err: ctx.Err()}
+			return
+		default:
+		}
+
 		data, err := os.ReadFile(filename)
-		resultChan <- result{data: data, err: err}
+
+		// Use select to prevent goroutine leak if context is cancelled
+		select {
+		case resultChan <- result{data: data, err: err}:
+		case <-ctx.Done():
+			// Don't block if context cancelled while sending
+		}
 	}()
 
 	select {
@@ -157,6 +171,7 @@ func InvalidateCache() {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 
-	globalConfig = nil
+	// Invalidate timestamp first to prevent readers from seeing nil config with valid timestamp
 	lastLoadTime = time.Time{}
+	globalConfig = nil
 }

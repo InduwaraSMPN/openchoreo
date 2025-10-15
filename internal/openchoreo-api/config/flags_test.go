@@ -21,14 +21,16 @@ func TestLoadFeatureFlags(t *testing.T) {
 	hadOriginal := err == nil
 
 	t.Cleanup(func() {
+		// Ensure cache invalidation always runs, even if file operations fail
+		defer InvalidateCache()
+
 		if hadOriginal {
 			if writeErr := os.WriteFile(configPath, originalData, 0o600); writeErr != nil {
-				t.Fatalf("failed to restore config file: %v", writeErr)
+				t.Errorf("failed to restore config file: %v", writeErr)
 			}
 		} else if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			t.Fatalf("failed to remove test config file: %v", removeErr)
+			t.Errorf("failed to remove test config file: %v", removeErr)
 		}
-		InvalidateCache()
 	})
 
 	writeConfigFile := func(t *testing.T, content string) {
